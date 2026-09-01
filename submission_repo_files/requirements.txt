@@ -1,0 +1,70 @@
+## --- Currently used — everything below runs as-is in this cloud sandbox
+## and will run identically on your own machine; nothing here requires
+## anything beyond a normal `pip install -r requirements.txt` ---
+pdfplumber>=0.11        # per-page text + table extraction from born-digital PDFs
+scikit-learn>=1.5       # TF-IDF vectorizer + cosine similarity (local vector search)
+scipy>=1.14              # sparse matrix storage for the vector index
+numpy>=1.26
+cryptography>=43         # Fernet encryption at rest for source documents
+python-dotenv>=1.0
+httpx>=0.28               # Anthropic Messages API client (raw HTTPS — see below)
+flask>=3.1                # app layer (chat, upload, citation viewer)
+playwright>=1.40          # HTML->PDF conversion for EDGAR filings (needs `playwright install chromium`
+                           # on a fresh machine — this sandbox already has Chromium at a fixed path)
+
+## ============================================================================
+## Why there's no `anthropic` or `fastapi` package here, and what to do
+## about it on your own machine
+## ============================================================================
+##
+## The DNA doc (§7) specifies the official `anthropic` SDK and FastAPI for the
+## app layer. Both were left out of this build because this cloud sandbox
+## blocks pip installs of anything not already cached — `anthropic` and
+## `fastapi` aren't cached here, so answer_generation/llm_client.py calls the
+## Messages API directly over HTTPS with `httpx` instead, and app.py uses
+## Flask (already available) instead of FastAPI. Confirmed during
+## development: `api.anthropic.com` IS reachable from this sandbox even
+## though `pip install anthropic` is not — so the raw-HTTPS approach actually
+## works end-to-end here, it's just not the SDK.
+##
+## This is NOT a limitation of your own machine — it's specific to this
+## development sandbox. On a machine with normal internet access, you can
+## (optionally) swap in the real packages:
+##
+##   anthropic>=0.34          # replaces answer_generation/llm_client.py's raw
+##                             #   httpx calls with the official SDK — same
+##                             #   public function (call_model), same behavior
+##   fastapi>=0.115           # + uvicorn>=0.30 — replaces app.py's Flask
+##                             #   routes with FastAPI equivalents
+##
+## Neither swap is required for the app to work — Flask + raw HTTPS are a
+## complete, working implementation, not a stub. Swap them only if you
+## specifically want the SDK/FastAPI for your own reasons (e.g. SDK-level
+## streaming, FastAPI's auto-generated OpenAPI docs).
+##
+## ============================================================================
+## Optional upgrade path — retrieval quality, not required to run the app
+## ============================================================================
+## This cloud sandbox also can't install dense-embedding libraries, so
+## retrieval runs on TF-IDF (embeddings/embedder.py) + a brute-force cosine
+## SQLite/scipy store (vectorstore/local_store.py) instead of the DNA doc's
+## spec'd BGE + Chroma. Real-corpus testing surfaced concrete TF-IDF
+## weaknesses (see README "Known retrieval limitations") that dense
+## embeddings would meaningfully improve — this is the single highest-value
+## upgrade if you have normal internet access:
+##
+##   sentence-transformers    # + torch — real dense embeddings (BAAI/bge-base-en-v1.5)
+##   chromadb                  # or faiss-cpu — replaces the SQLite/scipy vector store
+##   tiktoken                  # true LLM-token-accurate chunk sizing instead of word counts
+##
+## The module boundaries (ingestion/, embeddings/, vectorstore/,
+## answer_generation/) were kept narrow specifically so swapping any of this
+## in later touches those files only.
+##
+## ============================================================================
+## Optional — only if you rebuild the Drive-folder auto-sync (not built here;
+## documents currently reach this app via drag-and-drop / the /api/upload
+## endpoint, and via the batch CLI scripts for bulk ingestion)
+## ============================================================================
+##   google-api-python-client>=2.0
+##   google-auth-oauthlib>=1.0
